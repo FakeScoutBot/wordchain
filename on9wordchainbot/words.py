@@ -61,6 +61,7 @@ class Words(WordList):
 
 class Places(WordList):
     source = PLACES_SOURCE
+    allowed_punctuation = " '-."
 
     @classmethod
     def parse_source(cls, text: str) -> list[str]:
@@ -71,5 +72,5 @@ class Places(WordList):
         return [
             w.casefold()
             for w in words
-            if any(c.isalpha() for c in w) and all(c.isalpha() or c in " '-." for c in w)
+            if any(c.isalpha() for c in w) and all(c.isalpha() or c in cls.allowed_punctuation for c in w)
         ]

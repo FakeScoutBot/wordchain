@@ -21,7 +21,7 @@ class CountriesGame(HardModeGame):
         return (
             0 < len(text) <= 100
             and any(c.isalpha() for c in text)
-            and all(c.isalpha() or c in " '-." for c in text)
+            and all(c.isalpha() or c in Places.allowed_punctuation for c in text)
         )
 
     def normalize_answer_text(self, text: str) -> str:
@@ -35,6 +35,7 @@ class CountriesGame(HardModeGame):
 
     def get_random_valid_answer(self) -> Optional[str]:
         return get_random_word(
+            min_len=1,
             exclude_words=self.used_words,
             wordlist=self.wordlist,
             predicate=lambda word: self.get_word_start_letter(word) == self.get_word_end_letter(self.current_word)

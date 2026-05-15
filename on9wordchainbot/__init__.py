@@ -35,7 +35,10 @@ dp.error.register(error_handler)
 
 
 async def update_wordlists() -> None:
-    await asyncio.gather(Words.update(), Places.update())
+    results = await asyncio.gather(Words.update(), Places.update(), return_exceptions=True)
+    for wordlist, result in zip((Words, Places), results):
+        if isinstance(result, Exception):
+            logger.exception("Failed to update %s", wordlist.__name__, exc_info=result)
 
 
 @dp.startup()

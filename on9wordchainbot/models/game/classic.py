@@ -317,6 +317,8 @@ class ClassicGame:
             )
 
     async def send_turn_message(self) -> None:
+        required_letter = self.get_word_end_letter(self.current_word)
+        display_letter = required_letter.upper() if required_letter.isalpha() else required_letter
         min_letters_text = (
             f" and include <b>at least {self.min_letters_limit} letters</b>"
             if self.has_word_length_limit else ""
@@ -324,7 +326,7 @@ class ClassicGame:
         await self.send_message(
             (
                 f"Turn: {self.players_in_game[0].mention} (Next: {self.players_in_game[1].name})\n"
-                f"Your word must start with <i>{self.get_word_end_letter(self.current_word).upper()}</i>"
+                f"Your word must start with <i>{display_letter}</i>"
                 f"{min_letters_text}.\n"
                 f"You have <b>{self.time_limit}s</b> to answer.\n"
                 f"Players remaining: {len(self.players_in_game)}/{len(self.players)}\n"
