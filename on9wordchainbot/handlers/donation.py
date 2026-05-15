@@ -9,8 +9,9 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types.message import ContentType
 from aiogram.utils.deep_linking import create_start_link
 from aiogram.exceptions import TelegramBadRequest
+from bson.decimal128 import Decimal128
 
-from on9wordchainbot.resources import get_pool
+from on9wordchainbot.resources import get_db
 from on9wordchainbot.constants import PROVIDER_TOKEN, STAR
 from on9wordchainbot.utils import awaitable_to_coroutine, inline_keyboard_from_button, send_admin_group
 
@@ -114,23 +115,17 @@ async def successful_payment_handler(message: types.Message) -> None:
     amt = Decimal(payment.total_amount) / 100
     dt = datetime.now().replace(microsecond=0)
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """\
-            INSERT INTO donation (
-                donation_id, user_id, amount, donate_time,
-                telegram_payment_charge_id, provider_payment_charge_id
-            )
-            VALUES
-                ($1, $2, $3::NUMERIC, $4, $5, $6);""",
-            donation_id,
-            message.from_user.id,
-            str(amt),
-            dt,
-            payment.telegram_payment_charge_id,
-            payment.provider_payment_charge_id
-        )
+    db = get_db()
+    await db.donation.insert_one(
+        {
+            "donation_id": donation_id,
+            "user_id": message.from_user.id,
+            "amount": Decimal128(str(amt)),
+            "donate_time": dt,
+            "telegram_payment_charge_id": payment.telegram_payment_charge_id,
+            "provider_payment_charge_id": payment.provider_payment_charge_id,
+        }
+    )
 
     asyncio.create_task(
         awaitable_to_coroutine(message.answer(

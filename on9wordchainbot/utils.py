@@ -1,13 +1,15 @@
 import random
+from decimal import Decimal
 from functools import wraps
 from string import ascii_lowercase
 from typing import Any, Awaitable, Callable, Coroutine, Optional, TypeVar
 
 from aiocache import cached
 from aiogram import types
+from bson.decimal128 import Decimal128
 
 from on9wordchainbot.constants import ADMIN_GROUP_ID, VIP
-from on9wordchainbot.resources import bot, on9bot, get_pool
+from on9wordchainbot.resources import bot, on9bot, get_db
 from on9wordchainbot.words import Words
 
 
@@ -54,11 +56,20 @@ async def send_admin_group(*args: Any, **kwargs: Any) -> types.Message:
 
 
 @cached(ttl=15)
-async def amt_donated(user_id: int) -> int:
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        amt = await conn.fetchval("SELECT SUM(amount) FROM donation WHERE user_id = $1;", user_id)
-        return amt or 0
+async def amt_donated(user_id: int) -> Decimal:
+    db = get_db()
+    res = await db.donation.aggregate(
+        [
+            {"$match": {"user_id": user_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+        ]
+    ).to_list(length=1)
+    if not res:
+        return Decimal("0")
+    total = res[0]["total"]
+    if isinstance(total, Decimal128):
+        return total.to_decimal()
+    return Decimal(str(total))
 
 
 @cached(ttl=15)

@@ -1,4 +1,3 @@
 -r requirements.txt
 mypy>=1.19
 types-aiofiles
-asyncpg-stubs

@@ -6,7 +6,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import (TelegramBadRequest, TelegramForbiddenError, TelegramMigrateToChat,
                                 TelegramRetryAfter, TelegramAPIError, TelegramUnauthorizedError)
 
-from on9wordchainbot.resources import GlobalState, get_pool
+from on9wordchainbot.resources import GlobalState, get_db
 from on9wordchainbot.constants import GameState
 from on9wordchainbot.utils import awaitable_to_coroutine, send_admin_group
 
@@ -21,10 +21,11 @@ async def migrate_chat(old_chat_id: int, new_chat_id: int) -> None:
             awaitable_to_coroutine(send_admin_group(f"Game moved from {old_chat_id} to {new_chat_id}."))
         )
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("UPDATE game SET group_id = $1 WHERE group_id = $2;", new_chat_id, old_chat_id)
-        await conn.execute("UPDATE gameplayer SET group_id = $1 WHERE group_id = $2;", new_chat_id, old_chat_id)
+    db = get_db()
+    await asyncio.gather(
+        db.game.update_many({"group_id": old_chat_id}, {"$set": {"group_id": new_chat_id}}),
+        db.gameplayer.update_many({"group_id": old_chat_id}, {"$set": {"group_id": new_chat_id}}),
+    )
 
     await send_admin_group(f"Group statistics migrated from {old_chat_id} to {new_chat_id}.")
 

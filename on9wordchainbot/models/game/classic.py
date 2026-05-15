@@ -9,7 +9,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.chat_member import ADMINS, MEMBERS
 
-from on9wordchainbot.resources import GlobalState, bot, on9bot, get_pool
+from on9wordchainbot.resources import GlobalState, bot, on9bot, get_db
 from on9wordchainbot.models.player import Player
 from on9wordchainbot.constants import GameSettings, GameState, OWNER_ID
 from on9wordchainbot.utils import (
@@ -498,78 +498,66 @@ class ClassicGame:
         GlobalState.games.pop(self.group_id, None)
 
     async def update_db(self) -> None:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            # Insert game instance
-            await conn.execute(
-                """\
-                INSERT INTO game (group_id, players, game_mode, winner, start_time, end_time)
-                    VALUES ($1, $2, $3, $4, $5, $6);""",
-                self.group_id,
-                len(self.players),
-                self.__class__.__name__,
-                self.players_in_game[0].user_id if self.players_in_game else None,
-                self.start_time,
-                self.end_time
-            )
-            # Get game id
-            game_id = await conn.fetchval(
-                "SELECT id FROM game WHERE group_id = $1 AND start_time = $2;",
-                self.group_id,
-                self.start_time
-            )
+        db = get_db()
+        res = await db.game.insert_one(
+            {
+                "group_id": self.group_id,
+                "players": len(self.players),
+                "game_mode": self.__class__.__name__,
+                "winner": self.players_in_game[0].user_id if self.players_in_game else None,
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+            }
+        )
+        game_id = res.inserted_id
         for player in self.players:  # Update db players in parallel
             asyncio.create_task(self.update_db_player(game_id, player))
 
-    async def update_db_player(self, game_id: int, player: Player) -> None:
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            player_exists = bool(await conn.fetchval("SELECT id FROM player WHERE user_id = $1;", player.user_id))
-            if player_exists:  # Update player in db
-                await conn.execute(
-                    """\
-                    UPDATE player
-                    SET game_count = game_count + 1,
-                        win_count = win_count + $1,
-                        word_count = word_count + $2,
-                        letter_count = letter_count + $3,
-                        longest_word = CASE WHEN longest_word IS NULL THEN $4::TEXT
-                                            WHEN $4::TEXT IS NULL THEN longest_word
-                                            WHEN LENGTH($4::TEXT) > LENGTH(longest_word) THEN $4::TEXT
-                                            ELSE longest_word
-                                       END
-                    WHERE user_id = $5;""",
-                    int(player in self.players_in_game),  # Support no winner in some game modes
-                    player.word_count,
-                    player.letter_count,
-                    player.longest_word or None,
-                    player.user_id
-                )
-            else:  # New player, create player in db
-                await conn.execute(
-                    """\
-                    INSERT INTO player (user_id, game_count, win_count, word_count, letter_count, longest_word)
-                        VALUES ($1, 1, $2, $3, $4, $5::TEXT);""",
-                    player.user_id,
-                    int(player in self.players_in_game),  # No winner in some game modes
-                    player.word_count,
-                    player.letter_count,
-                    player.longest_word or None
-                )
-
-            # Create gameplayer in db
-            await conn.execute(
-                """\
-                INSERT INTO gameplayer (user_id, group_id, game_id, won, word_count, letter_count, longest_word)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7);""",
-                player.user_id,
-                self.group_id,
-                game_id,
-                player in self.players_in_game,
-                player.word_count,
-                player.letter_count,
-                player.longest_word or None
+    async def update_db_player(self, game_id: object, player: Player) -> None:
+        db = get_db()
+        existing = await db.player.find_one(
+            {"user_id": player.user_id},
+            {"longest_word": 1, "_id": 0},
+        )
+        if existing:
+            current_longest = existing.get("longest_word") or ""
+            candidate = player.longest_word or ""
+            new_longest = max(current_longest, candidate, key=len) or None
+            await db.player.update_one(
+                {"user_id": player.user_id},
+                {
+                    "$inc": {
+                        "game_count": 1,
+                        "win_count": int(player in self.players_in_game),
+                        "word_count": player.word_count,
+                        "letter_count": player.letter_count,
+                    },
+                    "$set": {"longest_word": new_longest},
+                },
             )
+        else:
+            await db.player.insert_one(
+                {
+                    "user_id": player.user_id,
+                    "game_count": 1,
+                    "win_count": int(player in self.players_in_game),
+                    "word_count": player.word_count,
+                    "letter_count": player.letter_count,
+                    "longest_word": player.longest_word or None,
+                }
+            )
+
+        await db.gameplayer.insert_one(
+            {
+                "user_id": player.user_id,
+                "group_id": self.group_id,
+                "game_id": game_id,
+                "won": player in self.players_in_game,
+                "word_count": player.word_count,
+                "letter_count": player.letter_count,
+                "longest_word": player.longest_word or None,
+            }
+        )
 
     async def scan_for_stale_timer(self) -> None:
         # Check if game timer is stuck
