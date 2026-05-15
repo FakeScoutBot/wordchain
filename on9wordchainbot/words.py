@@ -4,7 +4,7 @@ import logging
 from dawg import CompletionDAWG
 
 from on9wordchainbot.constants import WORDLIST_SOURCE
-from on9wordchainbot.resources import get_pool, get_session
+from on9wordchainbot.resources import get_db, get_session
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,9 @@ class Words:
                 return text.splitlines()
 
         async def get_words_from_db() -> list[str]:
-            pool = get_pool()
-            async with pool.acquire() as conn:
-                res = await conn.fetch("SELECT word from wordlist WHERE accepted;")
-                return [row[0] for row in res]
+            db = get_db()
+            res = await db.wordlist.find({"accepted": True}, {"word": 1, "_id": 0}).to_list(length=None)
+            return [row["word"] for row in res]
 
         source_task = asyncio.create_task(get_words_from_source())
         db_task = asyncio.create_task(get_words_from_db())

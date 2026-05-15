@@ -11,12 +11,11 @@ from aiocache import cached
 from aiogram import Router, types, html
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
-from asyncpg import Record
 from matplotlib.dates import DateFormatter
 from matplotlib.ticker import MaxNLocator
 
 from on9wordchainbot.constants import STAR
-from on9wordchainbot.resources import get_pool
+from on9wordchainbot.resources import get_db
 from on9wordchainbot.filters import IsOwner
 from on9wordchainbot.utils import has_star, send_groups_only_message
 
@@ -33,9 +32,8 @@ async def cmd_stats(message: types.Message) -> None:
         name += f" {STAR}"
     mention = user.mention_html(name=name)
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        res = await conn.fetchrow("SELECT * FROM player WHERE user_id = $1;", user.id)
+    db = get_db()
+    res = await db.player.find_one({"user_id": user.id})
 
     if not res:
         await message.reply(
@@ -60,15 +58,28 @@ async def cmd_stats(message: types.Message) -> None:
 @send_groups_only_message
 async def cmd_groupstats(message: types.Message) -> None:
     # TODO: Add top players in group (max 5) to message
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        player_cnt, game_cnt, word_cnt, letter_cnt = await conn.fetchrow(
-            """\
-            SELECT COUNT(DISTINCT user_id), COUNT(DISTINCT game_id), SUM(word_count), SUM(letter_count)
-                FROM gameplayer
-                WHERE group_id = $1;""",
-            message.chat.id
-        )
+    db = get_db()
+    res = await db.gameplayer.aggregate(
+        [
+            {"$match": {"group_id": message.chat.id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "player_ids": {"$addToSet": "$user_id"},
+                    "game_ids": {"$addToSet": "$game_id"},
+                    "word_cnt": {"$sum": "$word_count"},
+                    "letter_cnt": {"$sum": "$letter_count"},
+                }
+            },
+        ]
+    ).to_list(length=1)
+    if res:
+        player_cnt = len(res[0]["player_ids"])
+        game_cnt = len(res[0]["game_ids"])
+        word_cnt = res[0].get("word_cnt", 0) or 0
+        letter_cnt = res[0].get("letter_cnt", 0) or 0
+    else:
+        player_cnt = game_cnt = word_cnt = letter_cnt = 0
     await message.reply(
         (
             f"\U0001f4ca Statistics for <b>{html.quote(message.chat.title)}</b>\n"
@@ -83,21 +94,33 @@ async def cmd_groupstats(message: types.Message) -> None:
 
 @cached(ttl=5)
 async def get_global_stats() -> str:
-    pool = get_pool()
-
     async def get_cnt_1() -> tuple[int, int]:
-        async with pool.acquire() as conn:
-            group_cnt, game_cnt = await conn.fetchrow(
-                "SELECT COUNT(DISTINCT group_id), COUNT(*) FROM game;"
-            )
+        db = get_db()
+        group_cnt = len(await db.game.distinct("group_id"))
+        game_cnt = await db.game.count_documents({})
         return group_cnt, game_cnt
 
     async def get_cnt_2() -> tuple[int, int, int]:
-        async with pool.acquire() as conn:
-            player_cnt, word_cnt, letter_cnt = await conn.fetchrow(
-                "SELECT COUNT(*), SUM(word_count), SUM(letter_count) FROM player;"
-            )
-            return player_cnt, word_cnt, letter_cnt
+        db = get_db()
+        res = await db.player.aggregate(
+            [
+                {
+                    "$group": {
+                        "_id": None,
+                        "player_cnt": {"$sum": 1},
+                        "word_cnt": {"$sum": "$word_count"},
+                        "letter_cnt": {"$sum": "$letter_count"},
+                    }
+                }
+            ]
+        ).to_list(length=1)
+        if not res:
+            return 0, 0, 0
+        return (
+            res[0]["player_cnt"],
+            res[0].get("word_cnt", 0) or 0,
+            res[0].get("letter_cnt", 0) or 0,
+        )
 
     get_cnt_1_task = asyncio.create_task(get_cnt_1())
     get_cnt_2_task = asyncio.create_task(get_cnt_2())
@@ -131,109 +154,126 @@ async def cmd_trends(message: types.Message, command: CommandObject) -> None:
 
     t = time.time()  # Measure time used to generate graphs
     today = datetime.now().date()
-    pool = get_pool()
+    db = get_db()
+    start_dt = datetime.combine(today - timedelta(days=days - 1), datetime.min.time())
 
     async def get_daily_games() -> dict[str, Any]:
-        async with pool.acquire() as conn:
-            return dict(
-                await conn.fetch(
-                    """\
-                    SELECT start_time::DATE d, COUNT(start_time::DATE)
-                        FROM game
-                        WHERE start_time::DATE >= $1
-                        GROUP BY d
-                        ORDER BY d;""",
-                    today - timedelta(days=days - 1)
-                )
-            )
+        res = await db.game.aggregate(
+            [
+                {"$match": {"start_time": {"$gte": start_dt}}},
+                {
+                    "$group": {
+                        "_id": {
+                            "$dateToString": {"format": "%Y-%m-%d", "date": "$start_time"}
+                        },
+                        "count": {"$sum": 1},
+                    }
+                },
+                {"$sort": {"_id": 1}},
+            ]
+        ).to_list(length=None)
+        return {datetime.fromisoformat(r["_id"]).date(): r["count"] for r in res}
 
     async def get_active_players() -> dict[str, Any]:
-        async with pool.acquire() as conn:
-            return dict(
-                await conn.fetch(
-                    """\
-                    SELECT game.start_time::DATE d, COUNT(DISTINCT gameplayer.user_id)
-                        FROM gameplayer
-                        INNER JOIN game ON gameplayer.game_id = game.id
-                        WHERE game.start_time::DATE >= $1
-                        GROUP BY d
-                        ORDER BY d;""",
-                    today - timedelta(days=days - 1)
-                )
-            )
+        res = await db.gameplayer.aggregate(
+            [
+                {
+                    "$lookup": {
+                        "from": "game",
+                        "localField": "game_id",
+                        "foreignField": "_id",
+                        "as": "game",
+                    }
+                },
+                {"$unwind": "$game"},
+                {"$match": {"game.start_time": {"$gte": start_dt}}},
+                {
+                    "$group": {
+                        "_id": {
+                            "$dateToString": {
+                                "format": "%Y-%m-%d",
+                                "date": "$game.start_time",
+                            }
+                        },
+                        "user_ids": {"$addToSet": "$user_id"},
+                    }
+                },
+                {"$project": {"count": {"$size": "$user_ids"}}},
+                {"$sort": {"_id": 1}},
+            ]
+        ).to_list(length=None)
+        return {datetime.fromisoformat(r["_id"]).date(): r["count"] for r in res}
 
     async def get_active_groups() -> dict[str, Any]:
-        async with pool.acquire() as conn:
-            return dict(
-                await conn.fetch(
-                    """\
-                    SELECT start_time::DATE d, COUNT(DISTINCT group_id)
-                        FROM game
-                        WHERE game.start_time::DATE >= $1
-                        GROUP BY d
-                        ORDER BY d;""",
-                    today - timedelta(days=days - 1)
-                )
-            )
+        res = await db.game.aggregate(
+            [
+                {"$match": {"start_time": {"$gte": start_dt}}},
+                {
+                    "$group": {
+                        "_id": {
+                            "$dateToString": {"format": "%Y-%m-%d", "date": "$start_time"}
+                        },
+                        "group_ids": {"$addToSet": "$group_id"},
+                    }
+                },
+                {"$project": {"count": {"$size": "$group_ids"}}},
+                {"$sort": {"_id": 1}},
+            ]
+        ).to_list(length=None)
+        return {datetime.fromisoformat(r["_id"]).date(): r["count"] for r in res}
 
     async def get_cumulative_groups() -> dict[str, Any]:
-        async with pool.acquire() as conn:
-            return dict(
-                await conn.fetch(
-                    """\
-                    SELECT *
-                        FROM (
-                            SELECT d, SUM(count) OVER (ORDER BY d)
-                                FROM (
-                                    SELECT d, COUNT(group_id)
-                                        FROM (
-                                            SELECT DISTINCT group_id, MIN(start_time::DATE) d
-                                                FROM game
-                                                GROUP BY group_id
-                                        ) gd
-                                        GROUP BY d
-                                ) dg
-                        ) ds
-                        WHERE d >= $1;""",
-                    today - timedelta(days=days - 1)
-                )
-            )
+        res = await db.game.aggregate(
+            [
+                {"$group": {"_id": "$group_id", "first_date": {"$min": "$start_time"}}},
+                {
+                    "$project": {
+                        "_id": {
+                            "$dateToString": {"format": "%Y-%m-%d", "date": "$first_date"}
+                        }
+                    }
+                },
+                {"$group": {"_id": "$_id", "count": {"$sum": 1}}},
+                {"$sort": {"_id": 1}},
+            ]
+        ).to_list(length=None)
+        return {datetime.fromisoformat(r["_id"]).date(): r["count"] for r in res}
 
     async def get_cumulative_players() -> dict[str, Any]:
-        async with pool.acquire() as conn:
-            return dict(
-                await conn.fetch(
-                    """\
-                    SELECT *
-                        FROM (
-                            SELECT d, SUM(count) OVER (ORDER BY d)
-                                FROM (
-                                    SELECT d, COUNT(user_id)
-                                        FROM (
-                                            SELECT DISTINCT user_id, MIN(start_time::DATE) d
-                                                FROM gameplayer
-                                                INNER JOIN game ON game_id = game.id
-                                                GROUP BY user_id
-                                        ) ud
-                                        GROUP BY d
-                                ) du
-                        ) ds
-                        WHERE d >= $1;""",
-                    today - timedelta(days=days - 1)
-                )
-            )
+        res = await db.gameplayer.aggregate(
+            [
+                {
+                    "$lookup": {
+                        "from": "game",
+                        "localField": "game_id",
+                        "foreignField": "_id",
+                        "as": "game",
+                    }
+                },
+                {"$unwind": "$game"},
+                {"$group": {"_id": "$user_id", "first_date": {"$min": "$game.start_time"}}},
+                {
+                    "$project": {
+                        "_id": {
+                            "$dateToString": {"format": "%Y-%m-%d", "date": "$first_date"}
+                        }
+                    }
+                },
+                {"$group": {"_id": "$_id", "count": {"$sum": 1}}},
+                {"$sort": {"_id": 1}},
+            ]
+        ).to_list(length=None)
+        return {datetime.fromisoformat(r["_id"]).date(): r["count"] for r in res}
 
-    async def get_game_mode_play_cnt() -> list[Record]:
-        async with pool.acquire() as conn:
-            return await conn.fetch(
-                """\
-                SELECT COUNT(game_mode), game_mode
-                    FROM game
-                    WHERE start_time::DATE >= $1
-                    GROUP BY game_mode
-                    ORDER BY count;""",
-                today - timedelta(days=days - 1)
-            )
+    async def get_game_mode_play_cnt() -> list[tuple[int, str]]:
+        res = await db.game.aggregate(
+            [
+                {"$match": {"start_time": {"$gte": start_dt}}},
+                {"$group": {"_id": "$game_mode", "count": {"$sum": 1}}},
+                {"$sort": {"count": 1}},
+            ]
+        ).to_list(length=None)
+        return [(r["count"], r["_id"]) for r in res]
 
     # Execute multiple db queries at once for speed
     (
@@ -252,6 +292,16 @@ async def cmd_trends(message: types.Message, command: CommandObject) -> None:
         get_game_mode_play_cnt()
     )
 
+    running_total = 0
+    for dt in sorted(cumulative_groups):
+        running_total += cumulative_groups[dt]
+        cumulative_groups[dt] = running_total
+
+    running_total = 0
+    for dt in sorted(cumulative_players):
+        running_total += cumulative_players[dt]
+        cumulative_players[dt] = running_total
+
     # Handle the possible issue of no games played in a day,
     # so there are no gaps in the cumulative graphs
     # (probably never happens)
@@ -261,10 +311,10 @@ async def cmd_trends(message: types.Message, command: CommandObject) -> None:
         dt += timedelta(days=1)
         if dt not in cumulative_groups:
             if i == 0:
-                async with pool.acquire() as conn:
-                    cumulative_groups[dt] = await conn.fetchval(
-                        "SELECT COUNT(DISTINCT group_id) FROM game WHERE start_time::DATE <= $1;", dt
-                    )
+                cumulative_groups[dt] = max(
+                    (count for date_key, count in cumulative_groups.items() if date_key <= dt),
+                    default=0
+                )
             else:
                 cumulative_groups[dt] = cumulative_groups[dt - timedelta(days=1)]
 
@@ -273,15 +323,10 @@ async def cmd_trends(message: types.Message, command: CommandObject) -> None:
         dt += timedelta(days=1)
         if dt not in cumulative_players:
             if i == 0:
-                async with pool.acquire() as conn:
-                    cumulative_players[dt] = await conn.fetchval(
-                        """\
-                        SELECT COUNT(DISTINCT user_id)
-                            FROM gameplayer
-                            INNER JOIN game ON game_id = game.id
-                            WHERE start_time <= $1;""",
-                        dt
-                    )
+                cumulative_players[dt] = max(
+                    (count for date_key, count in cumulative_players.items() if date_key <= dt),
+                    default=0
+                )
             else:
                 cumulative_players[dt] = cumulative_players[dt - timedelta(days=1)]
 

@@ -14,7 +14,7 @@ On9 Word Chain Bot hosts games of word chain in Telegram groups.
 
 ### Requirements
 Python 3.10+ \
-PostgreSQL 11+ \
+MongoDB 6+ \
 2 Telegram bots
 
 > It is highly recommended that you turn off privacy mode for On9 Word Chain Bot via @BotFather,
@@ -26,7 +26,7 @@ Copy `config.json.template` to `config.json`, then edit the following constants 
 
 - `TOKEN`*: A Telegram bot token.
 - `ON9BOT_TOKEN`*: Another Telegram bot token for the virtual player bot.
-- `DB_URI`: A [PostgresSQL database URI](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING).
+- `DB_URI`: A MongoDB connection URI that includes the default database (e.g. `mongodb://user:pass@host:27017/wordchain`).
 - `PROVIDER_TOKEN`*#: A Telegram payment provider token.
 - `OWNER_ID`: Telegram user id of the bot owner.
 - `ADMIN_GROUP_ID`^: Telegram group id of the bot admin group. Error messages and word addition requests are sent here.
@@ -39,8 +39,9 @@ Copy `config.json.template` to `config.json`, then edit the following constants 
 \#: Optional if payment-related functions are commented out. \
 ^: Set to the same throwaway group if these features are not used.
 
-### Table Creation
-Create the required tables in your PostgreSQL database by running [init.sql](init.sql).
+### Database Setup
+Create a MongoDB database and set `DB_URI` to include the database name. The bot will create required
+indexes on startup.
 
 ### Deployment
 Install and update dependencies with `pip install -Ur requirements.txt`. \

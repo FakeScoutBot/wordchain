@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from uuid import uuid4
 
@@ -6,7 +7,7 @@ from aiogram import Router, F, types
 from aiogram.enums import ChatType
 from aiogram.filters import JOIN_TRANSITION, ChatMemberUpdatedFilter, Command, CommandObject, CommandStart
 
-from on9wordchainbot.resources import GlobalState, get_pool
+from on9wordchainbot.resources import GlobalState, get_db
 from on9wordchainbot.constants import ADMIN_GROUP_ID, OFFICIAL_GROUP_ID, VIP
 from on9wordchainbot.filters import IsOwner
 from on9wordchainbot.handlers.donation import send_donate_invoice
@@ -67,12 +68,25 @@ async def cmd_leave(message: types.Message) -> None:
 async def cmd_sql(message: types.Message, command: CommandObject) -> None:
     args = command.args
     if not args:
+        await message.reply(
+            "Function: Query MongoDB (collection + optional JSON filter).\n"
+            "Usage: `/sql collection {\"field\": \"value\"}`"
+        )
         return
 
-    pool = get_pool()
+    collection, _, raw_filter = args.partition(" ")
+    if not collection:
+        return
+
     try:
-        async with pool.acquire() as conn:
-            res = await conn.fetch(args)
+        filter_doc = json.loads(raw_filter) if raw_filter else {}
+    except json.JSONDecodeError as e:
+        await message.reply(f"`JSONDecodeError: {str(e)}`")
+        return
+
+    db = get_db()
+    try:
+        res = await db[collection].find(filter_doc).limit(20).to_list(length=20)
     except Exception as e:
         await message.reply(f"`{e.__class__.__name__}: {str(e)}`")
         return
@@ -81,10 +95,8 @@ async def cmd_sql(message: types.Message, command: CommandObject) -> None:
         await message.reply("No results returned.")
         return
 
-    text = ["*" + " - ".join(res[0].keys()) + "*"]
-    for r in res:
-        text.append("`" + " - ".join(str(i) for i in r.values()) + "`")
-    await message.reply("\n".join(text))
+    text = "\n".join(f"`{json.dumps(r, default=str)}`" for r in res)
+    await message.reply(text)
 
 
 @router.chat_member(ChatMemberUpdatedFilter(JOIN_TRANSITION))

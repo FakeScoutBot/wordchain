@@ -7,7 +7,7 @@ from aiogram.filters import Command, CommandObject
 
 from on9wordchainbot.constants import STAR, WORD_ADDITION_CHANNEL_ID
 from on9wordchainbot.filters import IsOwner
-from on9wordchainbot.resources import bot, get_pool
+from on9wordchainbot.resources import bot, get_db
 from on9wordchainbot.utils import awaitable_to_coroutine, check_word_existence, has_star, is_word, send_admin_group
 from on9wordchainbot.words import Words
 
@@ -63,10 +63,14 @@ async def cmd_reqaddword(message: types.Message, command: CommandObject) -> None
             existing.append(f"_{w.capitalize()}_")
             words_to_add.remove(w)
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        rej = await conn.fetch("SELECT word, reason FROM wordlist WHERE NOT accepted;")
-    for word, reason in rej:
+    db = get_db()
+    rej = await db.wordlist.find(
+        {"accepted": False},
+        {"word": 1, "reason": 1, "_id": 0},
+    ).to_list(length=None)
+    for entry in rej:
+        word = entry["word"]
+        reason = entry.get("reason")
         if word not in words_to_add:
             continue
         words_to_add.remove(word)
@@ -121,10 +125,14 @@ async def cmd_addwords(message: types.Message, command: CommandObject) -> None:
             existing.append(f"_{w.capitalize()}_")
             words_to_add.remove(w)
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        rej = await conn.fetch("SELECT word, reason FROM wordlist WHERE NOT accepted;")
-    for word, reason in rej:
+    db = get_db()
+    rej = await db.wordlist.find(
+        {"accepted": False},
+        {"word": 1, "reason": 1, "_id": 0},
+    ).to_list(length=None)
+    for entry in rej:
+        word = entry["word"]
+        reason = entry.get("reason")
         if word not in words_to_add:
             continue
         words_to_add.remove(word)
@@ -136,8 +144,10 @@ async def cmd_addwords(message: types.Message, command: CommandObject) -> None:
 
     text = ""
     if words_to_add:
-        async with pool.acquire() as conn:
-            await conn.copy_records_to_table("wordlist", records=[(w, True, None) for w in words_to_add])
+        await db.wordlist.insert_many(
+            [{"word": w, "accepted": True, "reason": None} for w in words_to_add],
+            ordered=False,
+        )
         text += f"Added {', '.join([f'_{w.capitalize()}_' for w in words_to_add])} to the word list.\n"
     if existing:
         text += f"{', '.join(existing)} {'is' if len(existing) == 1 else 'are'} already in the word list.\n"
@@ -175,15 +185,12 @@ async def cmd_rejword(message: types.Message, command: CommandObject) -> None:
         return
     word = word.lower()
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        r = await conn.fetchrow("SELECT accepted, reason FROM wordlist WHERE word = $1;", word)
-        if r is None:
-            await conn.execute(
-                "INSERT INTO wordlist (word, accepted, reason) VALUES ($1, false, $2)",
-                word,
-                reason.strip() or None
-            )
+    db = get_db()
+    r = await db.wordlist.find_one({"word": word}, {"accepted": 1, "reason": 1, "_id": 0})
+    if r is None:
+        await db.wordlist.insert_one(
+            {"word": word, "accepted": False, "reason": reason.strip() or None}
+        )
 
     word = word.capitalize()
     if r is None:
