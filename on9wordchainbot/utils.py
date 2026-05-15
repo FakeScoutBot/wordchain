@@ -88,10 +88,10 @@ def inline_keyboard_from_button(button: types.InlineKeyboardButton) -> types.Inl
 
 
 ADD_TO_GROUP_KEYBOARD = inline_keyboard_from_button(
-    types.InlineKeyboardButton(text="Add to group", url="https://t.me/on9wordchainbot?startgroup=_")
+    types.InlineKeyboardButton(text="Add to group", url="https://t.me/World9ChainBot?startgroup=_")
 )
 ADD_ON9BOT_TO_GROUP_KEYBOARD = inline_keyboard_from_button(
-    types.InlineKeyboardButton(text="Add On9Bot to group", url="https://t.me/On9Bot?startgroup=_")
+    types.InlineKeyboardButton(text="Add On9Bot to group", url="https://t.me/Test05668Bot?startgroup=_")
 )
 
 
