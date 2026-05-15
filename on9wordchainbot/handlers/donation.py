@@ -9,7 +9,7 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types.message import ContentType
 from aiogram.utils.deep_linking import create_start_link
 from aiogram.exceptions import TelegramBadRequest
-from bson.decimal128 import Decimal128  # type: ignore[import-untyped]
+from bson.decimal128 import Decimal128
 
 from on9wordchainbot.resources import get_db
 from on9wordchainbot.constants import PROVIDER_TOKEN, STAR
@@ -147,4 +147,3 @@ async def successful_payment_handler(message: types.Message) -> None:
             parse_mode=ParseMode.HTML
         )
     )
-from bson.decimal128 import Decimal128  # type: ignore[import-untyped]

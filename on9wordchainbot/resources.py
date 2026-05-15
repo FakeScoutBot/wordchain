@@ -7,7 +7,7 @@ import aiohttp
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase  # type: ignore[import-untyped]
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from on9wordchainbot.constants import TOKEN, ON9BOT_TOKEN, DB_URI
 

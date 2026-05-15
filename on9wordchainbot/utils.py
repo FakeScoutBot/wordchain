@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, Coroutine, Optional, TypeVar
 
 from aiocache import cached
 from aiogram import types
-from bson.decimal128 import Decimal128  # type: ignore[import-untyped]
+from bson.decimal128 import Decimal128
 
 from on9wordchainbot.constants import ADMIN_GROUP_ID, VIP
 from on9wordchainbot.resources import bot, on9bot, get_db
