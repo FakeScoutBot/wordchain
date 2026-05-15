@@ -10,15 +10,15 @@ from bson.decimal128 import Decimal128
 
 from on9wordchainbot.constants import ADMIN_GROUP_ID, VIP
 from on9wordchainbot.resources import bot, on9bot, get_db
-from on9wordchainbot.words import Words
+from on9wordchainbot.words import WordList, Words
 
 
 def is_word(s: str) -> bool:
     return all(c in ascii_lowercase for c in s)
 
 
-def check_word_existence(word: str) -> bool:
-    return word in Words.dawg
+def check_word_existence(word: str, wordlist: type[WordList] = Words) -> bool:
+    return word in wordlist.dawg
 
 
 def filter_words(
@@ -26,9 +26,11 @@ def filter_words(
     prefix: Optional[str] = None,
     required_letter: Optional[str] = None,
     banned_letters: Optional[list[str]] = None,
-    exclude_words: Optional[set[str]] = None
+    exclude_words: Optional[set[str]] = None,
+    wordlist: type[WordList] = Words,
+    predicate: Optional[Callable[[str], bool]] = None
 ) -> list[str]:
-    words: list[str] = Words.dawg.keys(prefix) if prefix else Words.dawg.keys()
+    words: list[str] = wordlist.dawg.keys(prefix) if prefix else wordlist.dawg.keys()
     if min_len > 1:
         words = [w for w in words if len(w) >= min_len]
     if required_letter:
@@ -37,6 +39,8 @@ def filter_words(
         words = [w for w in words if all(i not in w for i in banned_letters)]
     if exclude_words:
         words = [w for w in words if w not in exclude_words]
+    if predicate:
+        words = [w for w in words if predicate(w)]
     return words
 
 
@@ -45,9 +49,11 @@ def get_random_word(
     prefix: Optional[str] = None,
     required_letter: Optional[str] = None,
     banned_letters: Optional[list[str]] = None,
-    exclude_words: Optional[set[str]] = None
+    exclude_words: Optional[set[str]] = None,
+    wordlist: type[WordList] = Words,
+    predicate: Optional[Callable[[str], bool]] = None
 ) -> Optional[str]:
-    words = filter_words(min_len, prefix, required_letter, banned_letters, exclude_words)
+    words = filter_words(min_len, prefix, required_letter, banned_letters, exclude_words, wordlist, predicate)
     return random.choice(words) if words else None
 
 

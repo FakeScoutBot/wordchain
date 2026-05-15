@@ -22,6 +22,7 @@ VIP: list[int] = config["VIP"]
 VIP_GROUP: list[int] = config["VIP_GROUP"]
 
 WORDLIST_SOURCE = "https://raw.githubusercontent.com/dwyl/english-words/master/words.txt"
+PLACES_SOURCE = "https://raw.githubusercontent.com/FakeScoutBot/wordle-list/refs/heads/main/Places.json"
 
 STAR = "\u2b50\ufe0f"
 

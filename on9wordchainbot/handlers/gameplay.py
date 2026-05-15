@@ -179,10 +179,13 @@ async def cmd_incmaxp(message: types.Message) -> None:
 @router.message(HasGameInstance())
 @router.edited_message(HasGameInstance())
 async def answer_handler(message: types.Message) -> None:
-    if message.text is None or not re.match(r"^[a-zA-Z]{1,100}$", message.text):
+    if message.text is None:
         return
 
     game = GlobalState.games[message.chat.id]
+    if not game.is_valid_answer_text(message.text):
+        return
+
     if (
         game.players_in_game
         and message.from_user.id == game.players_in_game[0].user_id
