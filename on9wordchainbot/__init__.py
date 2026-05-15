@@ -1,11 +1,12 @@
 import logging
+import asyncio
 
 from aiogram import Dispatcher
 from periodic import Periodic
 
 from on9wordchainbot.resources import init_resources, close_resources
 from on9wordchainbot.utils import send_admin_group
-from on9wordchainbot.words import Words
+from on9wordchainbot.words import Places, Words
 
 try:
     import coloredlogs
@@ -33,10 +34,14 @@ dp.include_routers(*routers)
 dp.error.register(error_handler)
 
 
+async def update_wordlists() -> None:
+    await asyncio.gather(Words.update(), Places.update())
+
+
 @dp.startup()
 async def startup():
     await init_resources()
-    await Periodic(60 * 60, Words.update).start(delay=0)  # Run Words.update every hour
+    await Periodic(60 * 60, update_wordlists).start(delay=0)
     await send_admin_group("Bot starting.")
 
 @dp.shutdown()

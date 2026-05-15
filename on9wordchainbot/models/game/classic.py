@@ -18,11 +18,14 @@ from on9wordchainbot.utils import (
     get_random_word,
     send_admin_group,
 )
+from on9wordchainbot.words import WordList, Words
 
 
 class ClassicGame:
     name = "classic game"
     command = "startclassic"
+    wordlist: type[WordList] = Words
+    has_word_length_limit = True
 
     __slots__ = (
         "group_id", "players", "players_in_game", "state", "start_time", "end_time",
@@ -314,11 +317,15 @@ class ClassicGame:
             )
 
     async def send_turn_message(self) -> None:
+        min_letters_text = (
+            f" and include <b>at least {self.min_letters_limit} letters</b>"
+            if self.has_word_length_limit else ""
+        )
         await self.send_message(
             (
                 f"Turn: {self.players_in_game[0].mention} (Next: {self.players_in_game[1].name})\n"
-                f"Your word must start with <i>{self.current_word[-1].upper()}</i> and "
-                f"include <b>at least {self.min_letters_limit} letters</b>.\n"
+                f"Your word must start with <i>{self.get_word_end_letter(self.current_word).upper()}</i>"
+                f"{min_letters_text}.\n"
                 f"You have <b>{self.time_limit}s</b> to answer.\n"
                 f"Players remaining: {len(self.players_in_game)}/{len(self.players)}\n"
                 f"Total words: {self.turns}"
@@ -336,9 +343,10 @@ class ClassicGame:
 
     def get_random_valid_answer(self) -> Optional[str]:
         return get_random_word(
-            min_len=self.min_letters_limit,
-            prefix=self.current_word[-1],
-            exclude_words=self.used_words
+            min_len=self.min_letters_limit if self.has_word_length_limit else 1,
+            prefix=self.get_word_end_letter(self.current_word),
+            exclude_words=self.used_words,
+            wordlist=self.wordlist
         )
 
     async def vp_answer(self) -> None:
@@ -367,16 +375,21 @@ class ClassicGame:
         # Prevent circular imports
         from on9wordchainbot.models.game.elimination import EliminationGame
 
-        word = message.text.lower()
+        word = self.normalize_answer_text(message.text)
+        required_letter = self.get_word_end_letter(self.current_word)
 
         # Check if answer is invalid
-        if not word.startswith(self.current_word[-1]):
+        if self.get_word_start_letter(word) != required_letter:
             await message.reply(
-                f"_{word.capitalize()}_ does not start with _{self.current_word[-1].upper()}_."
+                f"_{word.capitalize()}_ does not start with _{required_letter.upper()}_."
             )
             return
         # No minimum letters limit for elimination game modes
-        if not isinstance(self, EliminationGame) and len(word) < self.min_letters_limit:
+        if (
+            self.has_word_length_limit
+            and not isinstance(self, EliminationGame)
+            and len(word) < self.min_letters_limit
+        ):
             await message.reply(
                 f"_{word.capitalize()}_ has less than {self.min_letters_limit} letters."
             )
@@ -384,7 +397,7 @@ class ClassicGame:
         if word in self.used_words:
             await message.reply(f"_{word.capitalize()}_ has been used.")
             return
-        if not check_word_existence(word):
+        if not check_word_existence(word, self.wordlist):
             await message.reply(f"_{word.capitalize()}_ is not in my list of words.")
             return
         if not await self.additional_answer_checkers(word, message):
@@ -429,7 +442,7 @@ class ClassicGame:
                     f"*{self.time_limit + GameSettings.TURN_SECONDS_REDUCTION_PER_LIMIT_CHANGE}s* "
                     f"to *{self.time_limit}s*.\n"
                 )
-            if self.min_letters_limit < GameSettings.MAX_WORD_LENGTH_LIMIT:
+            if self.has_word_length_limit and self.min_letters_limit < GameSettings.MAX_WORD_LENGTH_LIMIT:
                 self.min_letters_limit += GameSettings.WORD_LENGTH_LIMIT_INCREASE_PER_LIMIT_CHANGE
                 text += (
                     f"Minimum letters per word increased from "
@@ -440,7 +453,10 @@ class ClassicGame:
 
     async def running_initialization(self) -> None:
         # Random starting word
-        self.current_word = get_random_word(min_len=self.min_letters_limit)
+        self.current_word = get_random_word(
+            min_len=self.min_letters_limit if self.has_word_length_limit else 1,
+            wordlist=self.wordlist
+        )
         self.used_words.add(self.current_word)
         self.start_time = datetime.now().replace(microsecond=0)
 
@@ -452,6 +468,18 @@ class ClassicGame:
             ),
             parse_mode=ParseMode.HTML
         )
+
+    def is_valid_answer_text(self, text: str) -> bool:
+        return 0 < len(text) <= 100 and text.isascii() and text.isalpha()
+
+    def normalize_answer_text(self, text: str) -> str:
+        return text.lower()
+
+    def get_word_start_letter(self, word: str) -> str:
+        return word[0]
+
+    def get_word_end_letter(self, word: str) -> str:
+        return word[-1]
 
     async def running_phase_tick(self) -> bool:
         # Return values

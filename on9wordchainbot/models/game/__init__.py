@@ -2,6 +2,7 @@ from on9wordchainbot.models.game.banned_letters import BannedLettersGame
 from on9wordchainbot.models.game.chaos import ChaosGame
 from on9wordchainbot.models.game.chosen_first_letter import ChosenFirstLetterGame
 from on9wordchainbot.models.game.classic import ClassicGame
+from on9wordchainbot.models.game.countries import CountriesGame
 from on9wordchainbot.models.game.elimination import EliminationGame
 from on9wordchainbot.models.game.hard_mode import HardModeGame
 from on9wordchainbot.models.game.mixed_elimination import MixedEliminationGame
@@ -11,6 +12,7 @@ from on9wordchainbot.models.game.required_letter import RequiredLetterGame
 GAME_MODES = [
     ClassicGame,
     HardModeGame,
+    CountriesGame,
     ChaosGame,
     ChosenFirstLetterGame,
     RandomFirstLetterGame,
@@ -23,6 +25,7 @@ GAME_MODES = [
 __all__ = (
     "ClassicGame",
     "HardModeGame",
+    "CountriesGame",
     "ChaosGame",
     "ChosenFirstLetterGame",
     "RandomFirstLetterGame",

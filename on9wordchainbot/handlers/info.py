@@ -51,6 +51,7 @@ async def cmd_gameinfo(message: types.Message) -> None:
         "Players take turns to send words starting with the last letter of the previous word.\n\n"
         "Variants:\n"
         "/starthard - Hard mode game\n"
+        "/startcountries - Hard mode with countries, states, and cities\n"
         "/startchaos - Chaos game (random turn order)\n"
         "/startcfl - Chosen first letter game\n"
         "/startrfl - Random first letter game\n"
