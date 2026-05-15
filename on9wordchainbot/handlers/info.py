@@ -34,10 +34,10 @@ async def cmd_help(message: types.Message) -> None:
         "/troubleshoot - Resolve common issues\n"
         "/reqaddword - Request addition of words\n"
         "/feedback - Send feedback to bot owner\n\n"
-        "You may message [𝑦 = 𝑒ˣ](https://t.me/InputUser) "
+        "You may message [Owner](https://t.me/InputUser) "
         "in *English / Cantonese* if you have issues with the bot.\n"
         "Official Group: https://t.me/+tSf_C6orrhlkY2Y8\n"
-        "Owner - [𝑦 = 𝑒ˣ](https://t.me/InputUser)"
+        "Owner - [Click](https://t.me/InputUser)"
     )
 
 
