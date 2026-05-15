@@ -34,12 +34,10 @@ async def cmd_help(message: types.Message) -> None:
         "/troubleshoot - Resolve common issues\n"
         "/reqaddword - Request addition of words\n"
         "/feedback - Send feedback to bot owner\n\n"
-        "You may message [Jono](tg://user?id=463998526) "
+        "You may message [𝑦 = 𝑒ˣ](https://t.me/InputUser) "
         "in *English / Cantonese* if you have issues with the bot.\n"
-        "Official Group: https://t.me/+T30aTNo-2Xx2kc52\n"
-        "Word Additions Channel (with status updates): @on9wcwa\n"
-        "Source Code: [jonowo/on9wordchainbot](https://github.com/jonowo/on9wordchainbot)\n"
-        "Epic icon designed by [Adri](tg://user?id=303527690)"
+        "Official Group: https://t.me/+tSf_C6orrhlkY2Y8\n"
+        "Owner - [𝑦 = 𝑒ˣ](https://t.me/InputUser)"
     )
 
 
@@ -61,7 +59,7 @@ async def cmd_gameinfo(message: types.Message) -> None:
         "Each player's score is their cumulative word length. "
         "The lowest scoring players are eliminated after each round.\n\n"
         "/startmelim - Mixed elimination game (donation reward)\n"
-        "Elimination game with different modes. Try at the [official group](https://t.me/+T30aTNo-2Xx2kc52)."
+        "Elimination game with different modes. Try at the [official group](https://t.me/+tSf_C6orrhlkY2Y8)."
     )
 
 
@@ -79,10 +77,10 @@ async def cmd_troubleshoot(message: types.Message) -> None:
             "3. Someone spammed commands in your group recently "
             "\u27a1\ufe0f The bot is rate limited in your group, wait patiently\n"
             "4. The bot does not respond to <code>/ping</code> "
-            "\u27a1\ufe0f The bot is likely offline, check @on9wcwa for status updates\n\n"
+            "\u27a1\ufe0f The bot is likely offline, contact @InputUser for status updates\n\n"
             "<b>If the bot cannot be added to your group</b>:\n"
             "1. There can be at most 20 bots in a group. Check if this limit is reached.\n\n"
-            "If you encounter other issues, please contact <a href='tg://user?id=463998526'>my owner</a>."
+            "If you encounter other issues, please contact <a href='https://t.me/InputUser'>my owner</a>."
         ),
         parse_mode=ParseMode.HTML,
     )
