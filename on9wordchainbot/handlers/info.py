@@ -30,13 +30,19 @@ async def cmd_help(message: types.Message) -> None:
         return
 
     await message.reply(
+        "<b>Available Commands</b>\n\n"
         "/gameinfo - Game mode descriptions\n"
         "/troubleshoot - Resolve common issues\n"
         "/reqaddword - Request addition of words\n"
         "/feedback - Send feedback to bot owner\n\n"
-        "You may message [Owner](https://t.me/InputUser) "
-        "in *English / Cantonese* if you have issues with the bot.\n"
-        "Official Group: https://t.me/+tSf_C6orrhlkY2Y8"
+        "You may message "
+        "<a href='https://t.me/InputUser'>𝑦 = 𝑒ˣ</a> "
+        "in <b>English / Cantonese</b> if you have issues with the bot.\n\n"
+        "Official Group: "
+        "<a href='https://t.me/+tSf_C6orrhlkY2Y8'>Join Group</a>\n\n"
+        "Owner - "
+        "<a href='https://t.me/InputUser'>𝑦 = 𝑒ˣ</a>",
+        parse_mode=ParseMode.HTML
     )
 
 
