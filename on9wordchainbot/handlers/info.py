@@ -36,8 +36,7 @@ async def cmd_help(message: types.Message) -> None:
         "/feedback - Send feedback to bot owner\n\n"
         "You may message [Owner](https://t.me/InputUser) "
         "in *English / Cantonese* if you have issues with the bot.\n"
-        "Official Group: https://t.me/+tSf_C6orrhlkY2Y8\n"
-        "Owner - [Click](https://t.me/InputUser)"
+        "Official Group: https://t.me/+tSf_C6orrhlkY2Y8"
     )
 
 
