@@ -306,29 +306,36 @@ async def cmd_trends(message: types.Message, command: CommandObject) -> None:
     # so there are no gaps in the cumulative graphs
     # (probably never happens)
 
-    dt = today - timedelta(days=days)
-    for i in range(days):
-        dt += timedelta(days=1)
-        if dt not in cumulative_groups:
-            if i == 0:
-                cumulative_groups[dt] = max(
-                    (count for date_key, count in cumulative_groups.items() if date_key <= dt),
-                    default=0
-                )
-            else:
-                cumulative_groups[dt] = cumulative_groups[dt - timedelta(days=1)]
+    start_date = today - timedelta(days=days - 1)
+    last_group_count = 0
+    for date_key in sorted(cumulative_groups):
+        if date_key <= start_date:
+            last_group_count = cumulative_groups[date_key]
+        else:
+            break
 
     dt = today - timedelta(days=days)
-    for i in range(days):
+    for _ in range(days):
         dt += timedelta(days=1)
-        if dt not in cumulative_players:
-            if i == 0:
-                cumulative_players[dt] = max(
-                    (count for date_key, count in cumulative_players.items() if date_key <= dt),
-                    default=0
-                )
-            else:
-                cumulative_players[dt] = cumulative_players[dt - timedelta(days=1)]
+        if dt in cumulative_groups:
+            last_group_count = cumulative_groups[dt]
+        else:
+            cumulative_groups[dt] = last_group_count
+
+    last_player_count = 0
+    for date_key in sorted(cumulative_players):
+        if date_key <= start_date:
+            last_player_count = cumulative_players[date_key]
+        else:
+            break
+
+    dt = today - timedelta(days=days)
+    for _ in range(days):
+        dt += timedelta(days=1)
+        if dt in cumulative_players:
+            last_player_count = cumulative_players[dt]
+        else:
+            cumulative_players[dt] = last_player_count
 
     while os.path.exists("trends.jpg"):  # Another /trend command has not finished processing
         await asyncio.sleep(0.1)
